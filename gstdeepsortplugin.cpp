@@ -128,7 +128,7 @@ gst_deepsortplugin_class_init (GstDeepSortPluginClass * klass)
 
   /* Set metadata describing the element */
   gst_element_class_set_details_simple (gstelement_class, "DeepSort", "DeepSort",
-      "Get object detection details from separate engine and track", "Nvidia");
+      "Get object detection details from separate engine and track", "jayveeangeles");
 }
 
 static void
