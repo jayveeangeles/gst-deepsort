@@ -54,7 +54,12 @@ void DeepSortPluginProcess(DeepSortPluginCtx* ctx, const cv::Mat& image, GstDete
 }
 
 void DeepSortPluginCtxDeinit(DeepSortPluginCtx* ctx) {
-  delete ctx->featureTensor;
-  delete ctx->mTracker;
-  delete ctx;
+  if (ctx->featureTensor)
+    delete ctx->featureTensor;
+  
+  if (ctx->mTracker)
+    delete ctx->mTracker;
+  
+  if (ctx)
+    delete ctx;
 }
