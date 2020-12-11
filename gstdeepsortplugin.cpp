@@ -344,12 +344,17 @@ gst_deepsortplugin_transform_ip (GstBaseTransform * btrans, GstBuffer * inbuf)
 
     DETECTBOX tmp = track.to_tlwh();
 
+    meta->confidence = 0.8;
     meta->label = g_strdup(deepsortplugin->to_track);
     meta->id = g_strdup(track.uuid_id.c_str());
-    meta->xmin = tmp(0);
-    meta->ymin = tmp(1);
-    meta->xmax = tmp(0) + tmp(2);
-    meta->ymax = tmp(1) + tmp(3);
+
+    float xmin = tmp(0) >= 0 ? tmp(0) : 0.0;
+    float ymin = tmp(1) >= 0 ? tmp(1) : 0.0;
+
+    meta->xmin = static_cast<guint>(xmin);
+    meta->ymin = static_cast<guint>(ymin);
+    meta->xmax = static_cast<guint>(xmin + tmp(2));
+    meta->ymax = static_cast<guint>(ymin + tmp(3));
   }
 
   gst_buffer_unmap (inbuf, &in_map_info);

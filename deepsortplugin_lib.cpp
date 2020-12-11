@@ -26,7 +26,7 @@ DETECTIONS convertToDetections(GstDetectionMetas* metas, gchar* objectToTrack) {
     if (g_strcmp0(metas->detections[i].label, objectToTrack) == 0) {
       DETECTION_ROW tmpRow;
       
-      tmpRow.confidence = 0.8;
+      tmpRow.confidence = metas->detections[i].confidence;
 
       tmpRow.tlwh       = DETECTBOX(
         metas->detections[i].xmin, 
