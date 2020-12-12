@@ -60,6 +60,10 @@ struct _GstDeepSortPlugin
 
   gchar* to_track;
   gchar* frozen_model;
+
+  gboolean draw_results;
+  guint skip_interval;
+  gint max_since_update;
 };
 
 // Boiler plate stuff

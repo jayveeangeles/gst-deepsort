@@ -20,7 +20,10 @@ enum
   PROP_COS_DIST,
   PROP_IOU_DIST,
   PROP_TO_TRACK,
-  PROP_FROZEN_MODEL
+  PROP_FROZEN_MODEL,
+  PROP_SKIP_FRAME_INTERVAL,
+  PROP_DRAW_RESULTS_ON_FRAME,
+  PROP_MAX_TIME_SINCE_UPDATE
 };
 
 /* Default values for properties */
@@ -29,6 +32,7 @@ enum
 #define DEFAULT_COS_DIST 0.3
 #define DEFAULT_IOU_DIST 0.9
 #define DEFAULT_MAX_ALIVE 120
+#define DEFAULT_MAX_TIME_SINCE_UPDATE 1
 
 static GstStaticPadTemplate gst_deepsortplugin_sink_template =
 GST_STATIC_PAD_TEMPLATE ("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
@@ -92,7 +96,8 @@ gst_deepsortplugin_class_init (GstDeepSortPluginClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_MAX_ALIVE,
       g_param_spec_uint ("max-alive", "Max Alive Time",
-          "Max amount of time tracker is kept alive in seconds",
+          "Max amount of time tracker is kept alive without detection in number"
+          " of frames.",
           0, 300, DEFAULT_MAX_ALIVE,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -119,6 +124,25 @@ gst_deepsortplugin_class_init (GstDeepSortPluginClass * klass)
           "absolute path of frozen model",
           DEFAULT_EMPTY_STRING,
           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_SKIP_FRAME_INTERVAL,
+      g_param_spec_uint ("skip-interval", "Skip Frame Interval",
+          "Skip frame every X interval.",
+          0, 120, 0,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_DRAW_RESULTS_ON_FRAME,
+    g_param_spec_boolean ("draw-results", "Draw Results",
+        "Draw boxes and label on current frame",
+        0,
+        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_MAX_TIME_SINCE_UPDATE,
+    g_param_spec_int ("since-update", "Maximum Time Since Update",
+        "Number of frames without corresponding detection before tracked item"
+        " is hidden from view. Tracker will still continue to live as per max-alive.",
+        0, 120, DEFAULT_MAX_TIME_SINCE_UPDATE,
+        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   /* Set sink and src pad capabilities */
   gst_element_class_add_pad_template (gstelement_class,
@@ -150,6 +174,9 @@ gst_deepsortplugin_init (GstDeepSortPlugin * deepsortplugin)
   deepsortplugin->max_alive = DEFAULT_MAX_ALIVE;
   deepsortplugin->cos_dist = DEFAULT_COS_DIST;
   deepsortplugin->iou_dist = DEFAULT_IOU_DIST;
+  deepsortplugin->draw_results = 0;
+  deepsortplugin->skip_interval = 0;
+  deepsortplugin->max_since_update = DEFAULT_MAX_TIME_SINCE_UPDATE;
 }
 
 /* Function called when a property of the element is set. Standard boilerplate.
@@ -184,6 +211,15 @@ gst_deepsortplugin_set_property (GObject * object, guint prop_id,
     case PROP_IOU_DIST:
       deepsortplugin->iou_dist = g_value_get_float (value);
       break;
+    case PROP_SKIP_FRAME_INTERVAL:
+      deepsortplugin->skip_interval = g_value_get_uint (value);
+      break;
+    case PROP_DRAW_RESULTS_ON_FRAME:
+      deepsortplugin->draw_results = g_value_get_boolean (value);
+      break;
+    case PROP_MAX_TIME_SINCE_UPDATE:
+      deepsortplugin->max_since_update = g_value_get_int (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -217,6 +253,15 @@ gst_deepsortplugin_get_property (GObject * object, guint prop_id, GValue * value
       break;
     case PROP_IOU_DIST:
       g_value_set_float (value, deepsortplugin->iou_dist);
+      break;
+    case PROP_SKIP_FRAME_INTERVAL:
+      g_value_set_uint (value, deepsortplugin->skip_interval);
+      break;
+    case PROP_DRAW_RESULTS_ON_FRAME:
+      g_value_set_boolean (value, deepsortplugin->draw_results);
+      break;
+    case PROP_MAX_TIME_SINCE_UPDATE:
+      g_value_set_int (value, deepsortplugin->max_since_update);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -308,7 +353,20 @@ gst_deepsortplugin_transform_ip (GstBaseTransform * btrans, GstBuffer * inbuf)
   GstMapInfo in_map_info;
   GstFlowReturn flow_ret = GST_FLOW_OK;
 
+  GstTrackedMetas *tracked_metas = GST_TRACKEDMETAS_ADD (inbuf);
+  tracked_metas->tracked_count = 0;
+  
+  bool doSkipFrames = deepsortplugin->skip_interval > 0 ? true : false;
+
   deepsortplugin->frame_num++;
+
+  if ((doSkipFrames) && \
+    ((deepsortplugin->frame_num % deepsortplugin->skip_interval) == 0)) {
+
+    g_info("skipping frame %d due to skip interval[%d] setting\n", \
+      deepsortplugin->frame_num, deepsortplugin->skip_interval);
+    return flow_ret;
+  }
 
   memset (&in_map_info, 0, sizeof (in_map_info));
   if (!gst_buffer_map (inbuf, &in_map_info, GST_MAP_READ)) {
@@ -332,13 +390,15 @@ gst_deepsortplugin_transform_ip (GstBaseTransform * btrans, GstBuffer * inbuf)
   );
 
   GstDetectionMetas *det_metas = GST_DETECTIONMETAS_GET (inbuf);
-  GstTrackedMetas *tracked_metas = GST_TRACKEDMETAS_ADD (inbuf);
-  tracked_metas->tracked_count = 0;
 
   DeepSortPluginProcess(deepsortplugin->deepsortpluginlib_ctx, img, det_metas, deepsortplugin->to_track);
+  
+  gchar id_n_label[64];
+  gchar trunc_id[6];
 
   for (auto& track : deepsortplugin->deepsortpluginlib_ctx->mTracker->tracks) {
-    if (!track.is_confirmed() || track.time_since_update > 1) continue;
+    if (!track.is_confirmed() || \
+      track.time_since_update > deepsortplugin->max_since_update) continue;
 
     GstTrackedMeta *meta = &tracked_metas->tracked[tracked_metas->tracked_count++];
 
@@ -355,6 +415,16 @@ gst_deepsortplugin_transform_ip (GstBaseTransform * btrans, GstBuffer * inbuf)
     meta->ymin = static_cast<guint>(ymin);
     meta->xmax = static_cast<guint>(xmin + tmp(2));
     meta->ymax = static_cast<guint>(ymin + tmp(3));
+
+    if (deepsortplugin->draw_results) {
+      g_utf8_strncpy(trunc_id, meta->id, 6);
+      sprintf(id_n_label, "%s (%s)", trunc_id, meta->label);
+
+      cv::rectangle(img, cv::Point(meta->xmin, meta->ymin), \
+        cv::Point(meta->xmax, meta->ymax), cv::Scalar(0, 0, 255), 3);
+      cv::putText(img, id_n_label, cv::Point(meta->xmin, meta->ymin), \
+        cv::FONT_HERSHEY_DUPLEX, 1.0, cv::Scalar(0, 255, 0), 2);
+    }
   }
 
   gst_buffer_unmap (inbuf, &in_map_info);
