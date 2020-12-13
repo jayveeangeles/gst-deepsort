@@ -285,13 +285,13 @@ gst_deepsortplugin_start (GstBaseTransform * btrans)
 
   if ((!deepsortplugin->to_track)
       || (strlen (deepsortplugin->to_track) == 0)) {
-    g_error ("ERROR: to_track type not set \n");
+    GST_ERROR_OBJECT (deepsortplugin, "ERROR: to_track type not set \n");
     goto error;
   }
 
   if ((!deepsortplugin->frozen_model)
       || (strlen (deepsortplugin->frozen_model) == 0)) {
-    g_error ("ERROR: model path not set \n");
+    GST_ERROR_OBJECT (deepsortplugin, "ERROR: model path not set \n");
     goto error;
   }
 
@@ -317,10 +317,21 @@ gst_deepsortplugin_stop (GstBaseTransform * btrans)
 {
   GstDeepSortPlugin *deepsortplugin = GST_DEEPSORTPLUGIN (btrans);
 
-  GST_DEBUG_OBJECT (deepsortplugin, "deleted CV Mat \n");
+  GST_INFO_OBJECT (deepsortplugin,
+    "%26s %.2fus", "Conversion time (average):", \
+      deepsortplugin->convert_time / deepsortplugin->frame_num);
+
+  GST_INFO_OBJECT (deepsortplugin,
+    "%26s %.2fus", "Infer time (average):", \
+      deepsortplugin->infer_time / deepsortplugin->frame_num);
+
+  GST_INFO_OBJECT (deepsortplugin,
+    "%26s %.2fus", "Predict time (average):", \
+      deepsortplugin->predict_time / deepsortplugin->frame_num);
+
   // Deinit the algorithm library
   DeepSortPluginCtxDeinit (deepsortplugin->deepsortpluginlib_ctx);
-  GST_DEBUG_OBJECT (deepsortplugin, "ctx lib released \n");
+  GST_INFO_OBJECT (deepsortplugin, "ctx lib released \n");
 
   return TRUE;
 }
@@ -363,14 +374,15 @@ gst_deepsortplugin_transform_ip (GstBaseTransform * btrans, GstBuffer * inbuf)
   if ((doSkipFrames) && \
     ((deepsortplugin->frame_num % deepsortplugin->skip_interval) == 0)) {
 
-    g_info("skipping frame %d due to skip interval[%d] setting\n", \
+    GST_DEBUG_OBJECT (deepsortplugin,
+      "skipping frame %d due to skip interval[%d] setting\n", \
       deepsortplugin->frame_num, deepsortplugin->skip_interval);
     return flow_ret;
   }
 
   memset (&in_map_info, 0, sizeof (in_map_info));
   if (!gst_buffer_map (inbuf, &in_map_info, GST_MAP_READ)) {
-    g_error ("Error: Failed to map gst buffer\n");
+    GST_ERROR_OBJECT (deepsortplugin, "Error: Failed to map gst buffer\n");
     return GST_FLOW_ERROR;
   }
 
@@ -391,8 +403,30 @@ gst_deepsortplugin_transform_ip (GstBaseTransform * btrans, GstBuffer * inbuf)
 
   GstDetectionMetas *det_metas = GST_DETECTIONMETAS_GET (inbuf);
 
-  DeepSortPluginProcess(deepsortplugin->deepsortpluginlib_ctx, img, det_metas, deepsortplugin->to_track);
+  deepsortplugin->timer.start();
+  DETECTIONS detections = convertToDetections(
+    det_metas, deepsortplugin->to_track);
+  double convert_elapsed_time = deepsortplugin->timer.stop();
+  deepsortplugin->convert_time += convert_elapsed_time;
+  GST_DEBUG_OBJECT (deepsortplugin,
+    "%16s %.2fus", "Conversion time:", convert_elapsed_time);
   
+  deepsortplugin->timer.start();
+  deepsortplugin->deepsortpluginlib_ctx->featureTensor->getRectsFeature(img, detections);
+  double infer_elapsed_time = deepsortplugin->timer.stop();
+  deepsortplugin->infer_time += infer_elapsed_time;
+  GST_DEBUG_OBJECT (deepsortplugin,
+    "%16s %.2fus", "Inference time:", infer_elapsed_time);
+  
+  deepsortplugin->timer.start();
+  deepsortplugin->deepsortpluginlib_ctx->mTracker->predict();
+  double predict_elapsed_time = deepsortplugin->timer.stop();
+  deepsortplugin->predict_time += predict_elapsed_time;
+  GST_DEBUG_OBJECT (deepsortplugin,
+    "%16s %.2fus", "Predict time:", predict_elapsed_time);
+
+  deepsortplugin->deepsortpluginlib_ctx->mTracker->update(detections);
+
   gchar id_n_label[64];
   gchar trunc_id[6];
 

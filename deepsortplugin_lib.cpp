@@ -44,15 +44,6 @@ DETECTIONS convertToDetections(GstDetectionMetas* metas, gchar* objectToTrack) {
   return detections;
 }
 
-void DeepSortPluginProcess(DeepSortPluginCtx* ctx, const cv::Mat& image, GstDetectionMetas* metas, gchar* objectToTrack) {
-  DETECTIONS detections = convertToDetections(metas, objectToTrack);
-  
-  ctx->featureTensor->getRectsFeature(image, detections);
-  
-  ctx->mTracker->predict();
-  ctx->mTracker->update(detections);
-}
-
 void DeepSortPluginCtxDeinit(DeepSortPluginCtx* ctx) {
   if (ctx->featureTensor)
     delete ctx->featureTensor;
