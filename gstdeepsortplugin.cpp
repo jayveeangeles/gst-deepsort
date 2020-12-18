@@ -390,7 +390,7 @@ gst_deepsortplugin_transform_ip (GstBaseTransform * btrans, GstBuffer * inbuf)
     deepsortplugin->video_info.height *
     deepsortplugin->video_info.width * 3
   )
-      && "Unable to create caffe plugin lib ctx \n ");
+      && "buffer received does not match video resolution \n ");
 
   GST_DEBUG_OBJECT (deepsortplugin,
       "Processing Frame %" G_GUINT64_FORMAT "\n",
