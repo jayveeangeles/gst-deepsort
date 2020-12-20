@@ -17,20 +17,22 @@ DeepSortPluginCtx* DeepSortPluginCtxInit(DeepSortPluginInitParams* initParams)
   ctx->featureTensor = new FeatureTensor(ctx->initParams.frozenModel);
 
   // warm up tensorflow engine
-  gint width = 1280;
-  gint height = 720;
+  if (ctx->featureTensor) {
+    gint width = 1280;
+    gint height = 720;
 
-  DETECTIONS detections;
-  cv::Mat img(height, width, CV_8UC3, cv::Scalar(0,0, 100));
+    DETECTIONS detections;
+    cv::Mat img(height, width, CV_8UC3, cv::Scalar(0,0, 100));
 
-  DETECTION_ROW tmpRow;
-  tmpRow.confidence = 0.8;
-  tmpRow.tlwh = DETECTBOX(width / 6, height / 6, width / 3, height / 3);
+    DETECTION_ROW tmpRow;
+    tmpRow.confidence = 0.8;
+    tmpRow.tlwh = DETECTBOX(width / 6, height / 6, width / 3, height / 3);
 
-  tmpRow.class_num = 0;
-  detections.push_back(tmpRow);
+    tmpRow.class_num = 0;
+    detections.push_back(tmpRow);
 
-  ctx->featureTensor->getRectsFeature(img, detections);
+    ctx->featureTensor->getRectsFeature(img, detections);
+  }
 
   return ctx;
 }
