@@ -65,6 +65,8 @@ struct _GstDeepSortPlugin
   guint skip_interval;
   gint max_since_update;
 
+  guint inf_timeout;
+
   Stopwatch timer;
   double infer_time = 0.0f;
 };

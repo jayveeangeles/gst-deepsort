@@ -31,7 +31,8 @@ DeepSortPluginCtx* DeepSortPluginCtxInit(DeepSortPluginInitParams* initParams)
     tmpRow.class_num = 0;
     detections.push_back(tmpRow);
 
-    ctx->featureTensor->getRectsFeature(img, detections);
+    // initial timeout for 5s
+    ctx->featureTensor->getRectsFeature(img, detections, 5000);
   }
 
   return ctx;
@@ -62,11 +63,11 @@ DETECTIONS convertToDetections(GstDetectionMetas* metas, gchar* objectToTrack) {
   return detections;
 }
 
-void DeepSortPluginProcess(DeepSortPluginCtx* ctx, 
-  const cv::Mat& image, GstDetectionMetas* metas, gchar* objectToTrack) {
+void DeepSortPluginProcess(DeepSortPluginCtx* ctx, const cv::Mat& image, \
+  GstDetectionMetas* metas, gchar* objectToTrack, guint infTimeout) {
   DETECTIONS detections = convertToDetections(metas, objectToTrack);
   
-  ctx->featureTensor->getRectsFeature(image, detections);
+  ctx->featureTensor->getRectsFeature(image, detections, infTimeout);
   
   ctx->mTracker->predict();
   ctx->mTracker->update(detections);

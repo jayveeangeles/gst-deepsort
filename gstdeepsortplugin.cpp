@@ -23,7 +23,8 @@ enum
   PROP_FROZEN_MODEL,
   PROP_SKIP_FRAME_INTERVAL,
   PROP_DRAW_RESULTS_ON_FRAME,
-  PROP_MAX_TIME_SINCE_UPDATE
+  PROP_MAX_TIME_SINCE_UPDATE,
+  PROP_INFERENCE_TIMEOUT_IN_MS
 };
 
 /* Default values for properties */
@@ -33,6 +34,7 @@ enum
 #define DEFAULT_IOU_DIST 0.9
 #define DEFAULT_MAX_ALIVE 120
 #define DEFAULT_MAX_TIME_SINCE_UPDATE 1
+#define DEFAULT_INFERENCE_TIMEOUT_IN_MS 15
 
 static GstStaticPadTemplate gst_deepsortplugin_sink_template =
 GST_STATIC_PAD_TEMPLATE ("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
@@ -144,6 +146,12 @@ gst_deepsortplugin_class_init (GstDeepSortPluginClass * klass)
         0, 120, DEFAULT_MAX_TIME_SINCE_UPDATE,
         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+  g_object_class_install_property (gobject_class, PROP_INFERENCE_TIMEOUT_IN_MS,
+      g_param_spec_uint ("timeout", "Inference Timeout",
+          "Maximum time before inference times out in ms.",
+          0, 1000, DEFAULT_INFERENCE_TIMEOUT_IN_MS,
+          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
   /* Set sink and src pad capabilities */
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&gst_deepsortplugin_src_template));
@@ -177,6 +185,7 @@ gst_deepsortplugin_init (GstDeepSortPlugin * deepsortplugin)
   deepsortplugin->draw_results = 0;
   deepsortplugin->skip_interval = 0;
   deepsortplugin->max_since_update = DEFAULT_MAX_TIME_SINCE_UPDATE;
+  deepsortplugin->inf_timeout = DEFAULT_INFERENCE_TIMEOUT_IN_MS;
 }
 
 /* Function called when a property of the element is set. Standard boilerplate.
@@ -220,6 +229,9 @@ gst_deepsortplugin_set_property (GObject * object, guint prop_id,
     case PROP_MAX_TIME_SINCE_UPDATE:
       deepsortplugin->max_since_update = g_value_get_int (value);
       break;
+    case PROP_INFERENCE_TIMEOUT_IN_MS:
+      deepsortplugin->inf_timeout = g_value_get_uint (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -262,6 +274,9 @@ gst_deepsortplugin_get_property (GObject * object, guint prop_id, GValue * value
       break;
     case PROP_MAX_TIME_SINCE_UPDATE:
       g_value_set_int (value, deepsortplugin->max_since_update);
+      break;
+    case PROP_INFERENCE_TIMEOUT_IN_MS:
+      g_value_set_uint (value, deepsortplugin->inf_timeout);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -396,7 +411,8 @@ gst_deepsortplugin_transform_ip (GstBaseTransform * btrans, GstBuffer * inbuf)
   GstDetectionMetas *det_metas = GST_DETECTIONMETAS_GET (inbuf);
   
   deepsortplugin->timer.start();
-  DeepSortPluginProcess(deepsortplugin->deepsortpluginlib_ctx, img, det_metas, deepsortplugin->to_track);
+  DeepSortPluginProcess(deepsortplugin->deepsortpluginlib_ctx, \
+    img, det_metas, deepsortplugin->to_track, deepsortplugin->inf_timeout);
   double infer_elapsed_time = deepsortplugin->timer.stop();
   deepsortplugin->infer_time += infer_elapsed_time;
   GST_DEBUG_OBJECT (deepsortplugin,

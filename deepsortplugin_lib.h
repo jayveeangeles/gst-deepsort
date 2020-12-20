@@ -49,7 +49,7 @@ DeepSortPluginCtx* DeepSortPluginCtxInit(DeepSortPluginInitParams*);
 DETECTIONS convertToDetections( GstDetectionMetas*, gchar* );
 
 // Process Detections
-void DeepSortPluginProcess(DeepSortPluginCtx*, const cv::Mat&, GstDetectionMetas*, gchar*);
+void DeepSortPluginProcess(DeepSortPluginCtx*, const cv::Mat&, GstDetectionMetas*, gchar*, guint);
 
 // Deinitialize library context
 void DeepSortPluginCtxDeinit(DeepSortPluginCtx* ctx);
