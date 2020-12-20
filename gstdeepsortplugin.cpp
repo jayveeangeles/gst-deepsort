@@ -318,16 +318,8 @@ gst_deepsortplugin_stop (GstBaseTransform * btrans)
   GstDeepSortPlugin *deepsortplugin = GST_DEEPSORTPLUGIN (btrans);
 
   GST_INFO_OBJECT (deepsortplugin,
-    "%26s %.2fus", "Conversion time (average):", \
-      deepsortplugin->convert_time / deepsortplugin->frame_num);
-
-  GST_INFO_OBJECT (deepsortplugin,
     "%26s %.2fus", "Infer time (average):", \
       deepsortplugin->infer_time / deepsortplugin->frame_num);
-
-  GST_INFO_OBJECT (deepsortplugin,
-    "%26s %.2fus", "Predict time (average):", \
-      deepsortplugin->predict_time / deepsortplugin->frame_num);
 
   // Deinit the algorithm library
   DeepSortPluginCtxDeinit (deepsortplugin->deepsortpluginlib_ctx);
@@ -402,30 +394,13 @@ gst_deepsortplugin_transform_ip (GstBaseTransform * btrans, GstBuffer * inbuf)
   );
 
   GstDetectionMetas *det_metas = GST_DETECTIONMETAS_GET (inbuf);
-
-  deepsortplugin->timer.start();
-  DETECTIONS detections = convertToDetections(
-    det_metas, deepsortplugin->to_track);
-  double convert_elapsed_time = deepsortplugin->timer.stop();
-  deepsortplugin->convert_time += convert_elapsed_time;
-  GST_DEBUG_OBJECT (deepsortplugin,
-    "%16s %.2fus", "Conversion time:", convert_elapsed_time);
   
   deepsortplugin->timer.start();
-  deepsortplugin->deepsortpluginlib_ctx->featureTensor->getRectsFeature(img, detections);
+  DeepSortPluginProcess(deepsortplugin->deepsortpluginlib_ctx, img, det_metas, deepsortplugin->to_track);
   double infer_elapsed_time = deepsortplugin->timer.stop();
   deepsortplugin->infer_time += infer_elapsed_time;
   GST_DEBUG_OBJECT (deepsortplugin,
     "%16s %.2fus", "Inference time:", infer_elapsed_time);
-  
-  deepsortplugin->timer.start();
-  deepsortplugin->deepsortpluginlib_ctx->mTracker->predict();
-  double predict_elapsed_time = deepsortplugin->timer.stop();
-  deepsortplugin->predict_time += predict_elapsed_time;
-  GST_DEBUG_OBJECT (deepsortplugin,
-    "%16s %.2fus", "Predict time:", predict_elapsed_time);
-
-  deepsortplugin->deepsortpluginlib_ctx->mTracker->update(detections);
 
   gchar id_n_label[64];
   gchar trunc_id[6];

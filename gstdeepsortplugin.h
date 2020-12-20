@@ -66,7 +66,7 @@ struct _GstDeepSortPlugin
   gint max_since_update;
 
   Stopwatch timer;
-  double convert_time = 0.0f, infer_time = 0.0f, predict_time=0.0f;
+  double infer_time = 0.0f;
 };
 
 // Boiler plate stuff
