@@ -67,10 +67,13 @@ void DeepSortPluginProcess(DeepSortPluginCtx* ctx, const cv::Mat& image, \
   GstDetectionMetas* metas, gchar* objectToTrack, guint infTimeout) {
   DETECTIONS detections = convertToDetections(metas, objectToTrack);
   
-  ctx->featureTensor->getRectsFeature(image, detections, infTimeout);
+  bool infResult = \
+    ctx->featureTensor->getRectsFeature(image, detections, infTimeout);
   
-  ctx->mTracker->predict();
-  ctx->mTracker->update(detections);
+  if (infResult) {
+    ctx->mTracker->predict();
+    ctx->mTracker->update(detections);
+  }
 }
 
 void DeepSortPluginCtxDeinit(DeepSortPluginCtx* ctx) {
